@@ -1,0 +1,106 @@
+---
+title: "7 - exercise"
+format: 
+  html: 
+    embed-resources: true
+editor: visual
+---
+
+Let's play around with Tidy Models and Model Studio to see what we see. Essentially, you're going to do some empirically advanced data exploration. Let's go.
+
+### 1. Load libraries
+
+Insert a code chunk that will load `modelStudio`, `DALEX`, `tidyverse`, `tidymodels`, `explore`, `DataExplorer`, `skimr`, and `modeldata`.
+
+```{r}
+#| label: load-libraries
+#| warning: false
+#| message: false
+
+
+```
+
+### 2. Grab a dataset
+
+Load the `attrition` dataset from `modeldata`. The database has a lot of variables, and "attrition" is when someone leaves a company. It's a great way to look at those factors that lead to people quitting, allowing managers to attempt to predict who is likely to leave.
+
+Use `skimr` to create a tibble of summary stats called `attrition_summ_stats`.
+
+```{r}
+#| label: load-data
+
+
+```
+
+### 3. DataExplorer report
+
+There's a lot going on in this database. Generate a DataExplorer report. Specify the dependent variable (`y`) as `"Attrition"`. Title the report "EDA report - job attrition." It'll take a bit.
+
+```{r}
+#| label: dataexplorer
+#| eval: false
+
+
+```
+
+There's an awful lot in there, and a lot of it is unhelpful with so many variables. Scroll down to the Bivariate Distribution (Boxplot plots by Attrition). List three things that look like characteristics of people more likely to leave their jobs.
+
+**THREE THINGS (your answer):**
+
+### 4. Shiny EDA
+
+Create a Shiny app that explores the data interactively. While the app is running you won't be able to do anything else. Set your Target to `Attrition` and answer:
+
+```{r}
+#| label: shiny-eda
+#| eval: false
+
+# attrition |> explore()
+```
+
+-   Does traveling frequently for business make it more or less likely that someone leaves?
+
+**ANSWER**:
+
+-   What levels of Environment Satisfaction lead to more turnover?
+
+**ANSWER**:
+
+-   Are married people more or less likely to quit?
+
+**ANSWER**:
+
+-   On average, with how many companies have workers been employed?
+
+**ANSWER**:
+
+### 5. Tidy Models and a linear fit on lending data
+
+The following code loads the `lending_club` data and fits a linear model to explain the interest rate charged on loans. The variables are: size of the loan (`funded_amnt`), annual income of the borrower, percentage of revolving credit used (`revol_util`), total debt usage as a percentage of authorized (`all_util`), open accounts in the past two years (`open_il_24m`), and delinquencies in the last two years (`delinq_2yrs`).
+
+Run the code below and answer.
+
+```{r}
+#| label: lending-club-lm
+
+
+```
+
+Please interpret the results (briefly). What does the output mean?
+
+**ANSWER**:
+
+Everything else equal, what was the average "base" rate charged for loans in this dataset? Hint - the intercept can help.
+
+**ANSWER**:
+
+### 6. Model Studio explainer
+
+Create an explainer object for the lending model. Your `y` should be `lending_club$int_rate`. Label your explainer "Loan Interest Rates."
+
+```{r}
+#| label: lending-explainer
+#| eval: false
+
+
+```

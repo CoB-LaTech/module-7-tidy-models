@@ -1,0 +1,227 @@
+---
+title: "7: Tidy Models and Model Studio introduction"
+format: 
+  html: 
+    embed-resources: true
+editor: visual
+---
+
+### Introduction
+
+We are going to introduce modeling in the tidyverse herein. We are going to do some exploratory (descriptive) modeling, and some predictive modeling, on publicly available datasets to develop some skill and intuition. If this is something you would like to do, either professionally or personally, I strongly recommend [*Tidy Modeling in R*](https://www.tmwr.org/), a fantastic (and free) resource to help you learn and grow as a data scientist. I, and many data scientists, are eternally grateful to the community of like-minded nerds who share what we learn for the good of all. If coding were still hidden behind closed doors, as it was generally before open source changed the game, we'd still be in the dark ages of data science. Some of this lesson is adapted from [*Tidy Modeling in R*](https://www.tmwr.org/); you should check it out.
+
+In fact, the first thing we're going to do is install and load the `modeldata` package, which contains datasets used in documentation and testing for `tidymodels` functions and models. There are other packages we will be using, like `DALEX` and `modelStudio`, so per usual, install those you need before loading them.
+
+### Install and load libraries
+
+```{r}
+#| label: load-libraries
+#| warning: false
+#| message: false
+
+# install as necessary
+# install.packages("modelStudio")
+# install.packages("DALEX")
+# install.packages("modeldata")
+# install.packages("tidyverse")
+# install.packages("tidymodels")
+
+library(modelStudio)
+library(DALEX)
+library(tidyverse)
+library(tidymodels)
+library(modeldata)
+```
+
+### Exploratory Data Analysis - various methods
+
+Before we get into tidy models, let's do some EDA in various ways. We'll start by creating a tibble of car prices data. This dataset, and many others, are included in the `modeldata` package. If we're modeling, that means we have some outcome variable that we're trying to explain or forecast or both. In the `car_prices` dataset our outcome variable is the `Price` of the car. Another key term to understand is that the outcome variable is called the *dependent* variable in data science. The dependent variable is potentially and partially determined by the *independent*, or explainer, variables. Let's create our tibble:
+
+```{r}
+#| label: car-prices
+
+data(car_prices)
+```
+
+Now that we have a new database of car prices, take a look at it by clicking it in the **Variables panel**. We have a reasonable number (18) of variables, mostly categorical (e.g. are the seats leather?), but some continuous variables, e.g. mileage. Some choices in EDA methodologies depend upon the datasets you're working with. With a relatively small dataset, like this one, we can use tools that work best with smaller datasets, like an explorer report and a cool Shiny app. What's really fun is that you can do incredible things with a few lines of code, since other data scientists have created packages that run lots of code in the background.
+
+Let's create an EDA report. It will take a minute to run, because it's doing a lot of statistics in the background, but it will eventually return an html document for you to explore. Note that in the code below we need to tell R which variable is the dependent, or `y`, variable, so that `DataExplorer` can show univariate statistics relative to that variable (in this case, the sales price of the vehicle).
+
+```{r}
+#| label: data-explorer
+#| warning: false
+#| eval: false
+
+library(DataExplorer)
+
+car_prices |>
+    create_report(output_file  = "Car Prices EDA Explorer",
+                  y            = "Price",
+                  report_title = "EDA report - car sales price")
+```
+
+Assuming you've set your working directory, go find the html in your folder and open it up, preferably in your browser of choice. There is so much in this report, but we're not going to spend much time on it here. You get a breakdown of what's in the dataset, the kinds of variables, the degree to which you have missing data (in this already cleaned sample database, there are no missing observations), a correlation matrix (e.g. whether or not the car is a sedan is highly correlated with the number of doors - of course), principal component analysis, and more. It's a powerful "shortcut" that helps you see some things about your data very quickly.
+
+We can also create a one-line *interactive* EDA report, a [Shiny](https://shiny.posit.co/) app with one line of code. Share it with your boss and look like a genius. We'll need to load and use the `explore` package to do that. NOTE: since running Shiny apps locally ties up your R session, you'll need to uncomment the code to run it, then stop the app when you're done.
+
+```{r}
+#| label: explore-shiny
+#| warning: false
+#| eval: false
+
+library(explore)
+
+# car_prices |> explore()
+```
+
+### A slightly bigger dataset
+
+Let's load the `ames` housing dataset - home sales in Ames, Iowa. Great for practicing modeling, since there's more variables and more variation.
+
+```{r}
+#| label: ames-load
+
+data(ames)
+```
+
+### Summary statistics with skimr
+
+```{r}
+#| label: skim-eda
+#| warning: false
+
+library(skimr)
+
+ames_summ_stats <- skim(ames)
+```
+
+Open the new summary stats tibble. With one line of code, we've generated a very helpful tibble of summary stats, including the kind of "thing" the variable is, e.g. factor, character. If the variable is a character, like the neighborhood, we get the number of missing, unique, and other values. If the variable is a number, like the square footage of the garage, you will get mean, standard deviation, 1st, 25th, 50th (also known as the median), 75th, and 100th percentiles of the observations as well as a handy histogram of the data. For example the "year built" variable histogram shows that in our database of sold homes, more homes were sold with recent build years rather than older homes.
+
+Let's take a closer look at the sales price data. We're going to start diving into the `tidymodels` package, and make sure that `tidymodels` is the preferred package for modeling with `tidymodels_prefer()` to avoid conflicts with other packages. First, let's build a histogram of sales price.
+
+```{r}
+#| label: histogram-price
+#| warning: false
+
+tidymodels_prefer()
+
+ggplot(ames, aes(x = Sale_Price)) +
+    geom_histogram(bins = 50, col = "white") +
+    theme_minimal()
+```
+
+Even with a quick visualization, we see that the data are "right skewed" in that, while most of the sales prices are to the left of the distribution (lower sales prices) there are a few outliers - a few houses were sold for very high prices. A quick glance at our summary stats tibble tells us that the median sales price was \$160,000, but a home sold for (p100) \$755,000. Thus, the right skew. Modeling data always comes with some decision making on the part of the analyst. You can choose to drop the outlier, but assuming it is an accurate data point and not a mistake, we should keep it. One way to deal with outliers, and to improve the validity of statistical inference, is to log transform the data. Let's log transform sales price and create a new histogram of the transformed sales price.
+
+```{r}
+#| label: log-transform
+#| warning: false
+
+ames <- ames |>
+    mutate(log_sales_price = log10(Sale_Price))
+
+ggplot(ames, aes(x = log_sales_price)) +
+    geom_histogram(bins = 50, col = "white") +
+    theme_minimal()
+```
+
+Another advantage of log transformation is that, when modeling, no home will be predicted to have a negative sales price. When we get to our modeling, we'll use the `log_sales_price` instead of `Sale_Price`.
+
+### Geospatial visualization
+
+While tables of summary stats and histograms are nice in developing some intuition, geospatial information and visualization can be used to further develop intuition. Don't get bogged down too much in the code below - it takes some tweaking and experimenting with code to get it to do what you're after. Like all coding, we work to get something functional and then save the code so you can replicate it with other projects. You will wind up creating a bunch of code templates over time.
+
+In the code below, we're going to create a map of the neighborhoods and sales prices of homes in Ames. Note the `text` argument calls the neighborhood and sales price so that when we hover over a data point those data are presented to the viewer. Since we have latitude and longitude data in the tibble, we can use `scattermapbox` to create a precise map of home sales. We tell `plotly` to create a street map centered on the mean of the latitude and longitude data in our tibble.
+
+```{r}
+#| label: plotly-map
+#| warning: false
+
+library(plotly)
+conflicted::conflicts_prefer(plotly::layout)
+
+plot_map <- plot_ly(
+    data  = ames,
+    lon   = ~Longitude,
+    lat   = ~Latitude,
+    text  = ~paste("Neighborhood:", Neighborhood, "<br>",
+                   "Sale Price: $", Sale_Price),
+    split = ~Neighborhood,
+    type  = "scattermapbox",
+    mode  = "markers"
+) |>
+    layout(
+        title  = "Ames Home Sales",
+        mapbox = list(
+            style  = "open-street-map",
+            center = list(lon = mean(ames$Longitude), lat = mean(ames$Latitude)),
+            zoom   = 10
+        )
+    )
+
+plot_map
+```
+
+If you're like me, you don't have any experience with Ames, Iowa, hence the "exploratory" in EDA. Open the map in a new window. Zoom in, pan around, and see what you see. The center of town is devoid of home sales because that area is the campus of Iowa State University. The neighborhoods surrounding the university seem to have very reasonable sales prices. The richest neighborhoods seem to be located north of town, with Northridge Heights and Stone Brook seeming to have the highest sales prices, in the \$300,000 to \$600,000 range.
+
+### Fit a model
+
+Let's use a multiple linear regression model. We're going to set up a model to predict the log transformed sales price of homes in Ames. Multiple linear regression simply means we're going to use several (multiple) "explainer" variables to explain or predict home prices. This is the same process that [Zillow](https://www.zillow.com/) uses to create their "Zestimate" values of homes.
+
+There's an art that one develops over time for predictive modeling, so keep practicing. Some things to consider, for example, is the collinearity of some variables. If two variables are colinear it may not make sense to have both variables in the model because one is redundant. In the Ames dataset, we have variables `Lot_Frontage` and `Lot_Area`. The first is the linear footage of the "frontage" of the property, like the width of the lot facing the street. `Lot_Area` is the total square footage of the property (lot). These are obviously related (colinear), so keeping both may actually take away from the predictive power of the model.
+
+We have 73 variables that may partially explain sales prices. We could use neighborhood as a factor variable, but as we saw in the map some neighborhoods are enclosed in other neighborhoods while others are spread out considerably. Since we have latitude and longitude, we can use these as more precise predictors; we'll include these in our model. Other things that are likely to explain sales price include the year the home was built, the size of the lot, the total number of rooms, whether there's a second floor, the number of full bathrooms, and the number of fireplaces (I love fireplaces). Let's fit a multiple linear regression model with these independent variables. The dependent variable we are trying to explain is the log sales price of the home.
+
+```{r}
+#| label: fit-model
+#| warning: false
+
+library(broom)
+library(stargazer)
+
+linear_fit <- lm(log_sales_price ~ Longitude + Latitude + Fireplaces +
+                     Full_Bath + Year_Built + Lot_Area + TotRms_AbvGrd +
+                     Second_Flr_SF,
+                 data = ames)
+
+summary(linear_fit)
+
+tidy_fit <- tidy(linear_fit)
+
+stargazer_output <- stargazer(linear_fit,
+                              type  = "html",
+                              title = "Linear Model Results",
+                              out   = "lm_results_ames.html")
+```
+
+It looks like our model did pretty well. Almost all of the variables are significant determinants of the sales price, as expected. While it's difficult to interpret a coefficient by itself, the t-values and Pr values help us interpret the results. Larger t-values (in absolute value) indicate more importance in explaining the dependent variable. Pr(\>\|t\|) is the probability that our results are random. For example, the probability that the age of the home has nothing to do with sales prices is -2e-16, in other words, incredibly small. Regression output makes it even easier to judge at a glance with the traditional inclusion of "stars" for significance. `***` means that the probability that the variable is not meaningful is less than 1%. It might seem strange that we speak of significance as "probability that it is insignificant," but in data science we approach every problem with a null hypothesis of "this thing doesn't explain our outcome." When we have results as we do here, we can confidently say that the "null hypothesis of no relation is rejected." Apparently, however, no one cares about the second floor. That variable is completely insignificant.
+
+### Model Studio explainer
+
+Of course, it's always best that you are able to explain the results of your models, forecasts, and more with those who are not data scientists but need to make better decisions. A very nice and easy way to do that is to use the `DALEX` and `modelStudio` packages to create an "explainer" of how your model variables explain or predict the sale price, and then to publish the explainer in an app or web browser. We tell R what model we want explained, in other words, what the dependent variable is, and then run an app that is interactive. Uncomment the code to run it on your machine. Depending on the speed of your computer, the app might take several minutes to build. Let it do its thing.
+
+```{r}
+#| label: explainer
+#| warning: false
+#| eval: false
+
+# EXPLAINER
+explainer <- DALEX::explain(
+    model = linear_fit,
+    data  = ames,
+    y     = ames$log_sales_price,
+    label = "Multiple Linear Regression"
+)
+
+# MODEL STUDIO
+modelStudio::modelStudio(explainer)
+```
+
+Like before, as long as the app is running the rest of your R session is tied up. You can save the app, publish it to a server, or just play with it while it's running. Save the app, and then open it in a web browser. ModelStudio lets you do lots of cool things. The upper left panel shows you the relative importance of the variables in predicting sales price. Year built is the most significant determinant, and next up is the number of fireplaces (I told you). In the upper right panel I typically choose "Break Down" to show an audience examples of how the model works. You can choose a sample home (e.g. observation id: 1856) and the breakdown will show how, for that home, the variables increase and decrease the price of the home. For example, for observation 1856 the price increases because it has a fireplace, lowers because it only has five total rooms, increases because it sits on a larger lot, etc. This is a powerful visual explainer for non-data scientists (like your boss) who need to make better decisions. This tool alone should get you a raise.
+
+You have two other panels in the lower half of the app. You can choose from several other visualizations, but I like to have "Target vs Feature" on the lower left and "Residuals vs Feature" in the lower right. Target vs Feature allows you to look at univariate distributions of a particular variable against the sales price. Choose `Lot_Frontage` in the drop down menu. Both the lower left and right panels will update to show targets and residuals, respectively. The residuals panel on the lower right shows the distributions of the error term in the model. If the model is well specified the errors will be random, with a mean of zero. Our model seems to be in good shape. The residuals "cloud" seems random, with the middle of the cloud of residuals at the zero line.
+
+### Conclusion
+
+This is a fine place to take a breath. There's an awful lot here, some of which might take lots of practice to grasp. We all start somewhere, and you're far beyond somewhere. Well done, folks.
+
+Next up, we switch back to investments finance: how to measure risk properly, stress test a position, and run a Monte Carlo simulation of the future.
